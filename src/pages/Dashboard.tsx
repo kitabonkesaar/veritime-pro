@@ -1,9 +1,11 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import EmployeeDashboard from './EmployeeDashboard';
+import AdminDashboard from './AdminDashboard';
 
-export default function Index() {
-  const { isAuthenticated, isLoading } = useAuth();
+export default function Dashboard() {
+  const { user, isLoading, isAuthenticated } = useAuth();
 
   if (isLoading) {
     return (
@@ -16,5 +18,9 @@ export default function Index() {
     );
   }
 
-  return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return user?.role === 'admin' ? <AdminDashboard /> : <EmployeeDashboard />;
 }
