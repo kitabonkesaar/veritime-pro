@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Header } from '@/components/layout/Header';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { EmployeeAttendanceTable } from '@/components/dashboard/EmployeeAttendanceTable';
 import { PayrollSummary } from '@/components/dashboard/PayrollSummary';
@@ -87,11 +87,9 @@ export default function AdminDashboard() {
   const averageHours = 7.5;
 
   return (
-    <div className="min-h-screen">
-      <Header />
-      
-      <main className="container px-4 py-8 md:px-6">
-        <div className="mb-8 animate-fade-in">
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="animate-fade-in">
           <h2 className="text-2xl font-bold mb-1">Admin Dashboard</h2>
           <p className="text-muted-foreground">
             Monitor attendance and manage payroll
@@ -165,7 +163,7 @@ export default function AdminDashboard() {
             />
           </TabsContent>
         </Tabs>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }
