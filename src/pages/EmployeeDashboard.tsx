@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Header } from '@/components/layout/Header';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { AttendanceCard } from '@/components/attendance/AttendanceCard';
 import { AttendanceHistory } from '@/components/attendance/AttendanceHistory';
 import { AttendanceStatus, AttendanceLog } from '@/types';
@@ -19,7 +19,6 @@ export default function EmployeeDashboard() {
 
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
 
-  // Load mock history data
   useEffect(() => {
     const mockLogs: AttendanceLog[] = [
       {
@@ -56,29 +55,18 @@ export default function EmployeeDashboard() {
       clockOutTime: null,
       totalHoursToday: null,
     });
-    
-    toast({
-      title: "Clocked In Successfully",
-      description: `You clocked in at ${now.toLocaleTimeString()}`,
-    });
+    toast({ title: "Clocked In Successfully", description: `You clocked in at ${now.toLocaleTimeString()}` });
   };
 
   const handleClockOut = (photoUrl: string) => {
     const now = new Date();
     const clockInTime = status.clockInTime;
     let totalHours = null;
-    
     if (clockInTime) {
       totalHours = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
     }
+    setStatus(prev => ({ ...prev, clockOutTime: now, totalHoursToday: totalHours }));
 
-    setStatus(prev => ({
-      ...prev,
-      clockOutTime: now,
-      totalHoursToday: totalHours,
-    }));
-
-    // Add to today's log
     const newLog: AttendanceLog = {
       id: Date.now().toString(),
       userId: user?.id || '',
@@ -90,43 +78,27 @@ export default function EmployeeDashboard() {
       totalHours,
       createdAt: new Date(),
     };
-
     setLogs(prev => [newLog, ...prev]);
-    
-    toast({
-      title: "Clocked Out Successfully",
-      description: `You worked ${totalHours?.toFixed(1)} hours today`,
-    });
+    toast({ title: "Clocked Out Successfully", description: `You worked ${totalHours?.toFixed(1)} hours today` });
   };
 
   return (
-    <div className="min-h-screen">
-      <Header />
-      
-      <main className="container px-4 py-8 md:px-6">
-        <div className="mb-8 animate-fade-in">
-          <h2 className="text-2xl font-bold mb-1">
-            Welcome back, {user?.name?.split(' ')[0]}!
-          </h2>
-          <p className="text-muted-foreground">
-            Track your attendance and view your work hours
-          </p>
+    <AppLayout>
+      <div className="space-y-6">
+        <div className="animate-fade-in">
+          <h2 className="text-2xl font-bold mb-1">Welcome back, {user?.name?.split(' ')[0]}!</h2>
+          <p className="text-muted-foreground">Track your attendance and view your work hours</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            <AttendanceCard 
-              status={status}
-              onClockIn={handleClockIn}
-              onClockOut={handleClockOut}
-            />
+            <AttendanceCard status={status} onClockIn={handleClockIn} onClockOut={handleClockOut} />
           </div>
-          
           <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
             <AttendanceHistory logs={logs} />
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

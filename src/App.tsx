@@ -8,6 +8,12 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import Employees from "./pages/admin/Employees";
+import AttendanceGallery from "./pages/admin/AttendanceGallery";
+import Payroll from "./pages/admin/Payroll";
+import Settings from "./pages/admin/Settings";
+import History from "./pages/employee/History";
+import Profile from "./pages/employee/Profile";
 
 const queryClient = new QueryClient();
 
@@ -22,7 +28,12 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="/employees" element={<Employees />} />
+            <Route path="/attendance-gallery" element={<AttendanceGallery />} />
+            <Route path="/payroll" element={<Payroll />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
