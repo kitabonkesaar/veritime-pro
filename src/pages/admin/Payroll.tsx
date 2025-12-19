@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,82 +10,117 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { 
-  DollarSign, 
+  IndianRupee, 
   Download, 
   Calculator, 
   Clock,
   Users,
   TrendingUp,
   CheckCircle,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
-import { User, PayrollRecord } from '@/types';
+import { PayrollRecord } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { payrollService } from '@/services/payroll';
 
-// Mock data
-const mockEmployees: User[] = [
-  { id: '2', name: 'John Smith', email: 'john@company.com', role: 'employee', hourlyRate: 25, createdAt: new Date() },
-  { id: '3', name: 'Sarah Johnson', email: 'sarah@company.com', role: 'employee', hourlyRate: 30, createdAt: new Date() },
-  { id: '4', name: 'Mike Davis', email: 'mike@company.com', role: 'employee', hourlyRate: 28, createdAt: new Date() },
-  { id: '5', name: 'Emily Brown', email: 'emily@company.com', role: 'employee', hourlyRate: 32, createdAt: new Date() },
-];
+// Generate last 12 months for selection
+const generateMonths = () => {
+  const months = [];
+  const date = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(date.getFullYear(), date.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+    months.push({ value, label });
+  }
+  return months;
+};
 
-const months = [
-  { value: '2025-01', label: 'January 2025' },
-  { value: '2024-12', label: 'December 2024' },
-  { value: '2024-11', label: 'November 2024' },
-  { value: '2024-10', label: 'October 2024' },
-];
+const months = generateMonths();
 
 export default function Payroll() {
-  const [selectedMonth, setSelectedMonth] = useState('2025-01');
+  const [selectedMonth, setSelectedMonth] = useState(months[0].value);
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [payrollGenerated, setPayrollGenerated] = useState(false);
   const { toast } = useToast();
 
-  // Generate mock payroll data
-  const payrollData = mockEmployees.map((employee) => {
-    const hoursWorked = 160 + Math.random() * 20 - 10; // 150-170 hours
-    const overtime = Math.max(0, hoursWorked - 160);
-    const regularPay = Math.min(hoursWorked, 160) * (employee.hourlyRate || 25);
-    const overtimePay = overtime * (employee.hourlyRate || 25) * 1.5;
-    const grossPay = regularPay + overtimePay;
-    
-    return {
-      employee,
-      hoursWorked,
-      overtime,
-      regularPay,
-      overtimePay,
-      grossPay,
-    };
-  });
+  const loadPayroll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await payrollService.getPayrollRecords(selectedMonth);
+      setPayrollRecords(data);
+    } catch (error) {
+      console.error('Error loading payroll:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load payroll records',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedMonth, toast]);
 
-  const totalStats = {
-    employees: payrollData.length,
-    totalHours: payrollData.reduce((sum, p) => sum + p.hoursWorked, 0),
-    totalPayroll: payrollData.reduce((sum, p) => sum + p.grossPay, 0),
-    avgRate: mockEmployees.reduce((sum, e) => sum + (e.hourlyRate || 0), 0) / mockEmployees.length,
-  };
+  useEffect(() => {
+    loadPayroll();
+  }, [loadPayroll]);
 
   const handleGeneratePayroll = async () => {
     setIsGenerating(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setIsGenerating(false);
-    setPayrollGenerated(true);
-    toast({
-      title: 'Payroll Generated',
-      description: `Payroll for ${months.find(m => m.value === selectedMonth)?.label} has been generated successfully.`,
-    });
+    try {
+      await payrollService.generatePayroll(selectedMonth);
+      toast({
+        title: 'Payroll Generated',
+        description: `Payroll for ${months.find(m => m.value === selectedMonth)?.label} has been generated successfully.`,
+      });
+      loadPayroll();
+    } catch (error) {
+      console.error('Error generating payroll:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to generate payroll',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleMarkAsPaid = async (record: PayrollRecord) => {
+    try {
+      await payrollService.markAsPaid(record.id);
+      toast({
+        title: 'Status Updated',
+        description: 'Marked as paid.',
+      });
+      loadPayroll();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to update status',
+      });
+    }
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'INR',
     }).format(amount);
+  };
+
+  const totalStats = {
+    employees: payrollRecords.length,
+    totalHours: payrollRecords.reduce((sum, p) => sum + p.totalHours, 0),
+    totalPayroll: payrollRecords.reduce((sum, p) => sum + p.grossPay, 0),
+    avgRate: payrollRecords.length > 0 
+      ? payrollRecords.reduce((sum, p) => sum + (p.employee?.hourlyRate || 0), 0) / payrollRecords.length 
+      : 0,
   };
 
   return (
@@ -99,10 +134,10 @@ export default function Payroll() {
               Calculate and manage employee payroll
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select month" />
+                <SelectValue placeholder="Select Month" />
               </SelectTrigger>
               <SelectContent>
                 {months.map((month) => (
@@ -112,166 +147,141 @@ export default function Payroll() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Export
+            <Button onClick={handleGeneratePayroll} disabled={isGenerating}>
+              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Calculator className="h-4 w-4 mr-2" />}
+              Generate Payroll
             </Button>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-          <Card variant="glass" className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Users className="h-5 w-5 text-primary" />
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          <Card variant="glass">
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary/10 text-primary">
+                <Users className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Employees</p>
+                <p className="text-sm text-muted-foreground">Total Employees</p>
                 <p className="text-2xl font-bold">{totalStats.employees}</p>
               </div>
-            </div>
+            </CardContent>
           </Card>
-          <Card variant="glass" className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-info/10">
-                <Clock className="h-5 w-5 text-info" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Hours</p>
-                <p className="text-2xl font-bold">{totalStats.totalHours.toFixed(0)}h</p>
-              </div>
-            </div>
-          </Card>
-          <Card variant="glass" className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-accent/10">
-                <TrendingUp className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Avg Rate</p>
-                <p className="text-2xl font-bold">{formatCurrency(totalStats.avgRate)}</p>
-              </div>
-            </div>
-          </Card>
-          <Card variant="glass" className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <DollarSign className="h-5 w-5 text-primary" />
+          
+          <Card variant="glass">
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-green-500/10 text-green-500">
+                <IndianRupee className="h-6 w-6" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Payroll</p>
-                <p className="text-2xl font-bold text-primary">{formatCurrency(totalStats.totalPayroll)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalStats.totalPayroll)}</p>
               </div>
-            </div>
+            </CardContent>
+          </Card>
+          
+          <Card variant="glass">
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500">
+                <Clock className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Hours</p>
+                <p className="text-2xl font-bold">{totalStats.totalHours.toFixed(1)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card variant="glass">
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-purple-500/10 text-purple-500">
+                <TrendingUp className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Avg. Hourly Rate</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalStats.avgRate)}</p>
+              </div>
+            </CardContent>
           </Card>
         </div>
 
         {/* Payroll Table */}
-        <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+        <Card className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                Payroll Details - {months.find(m => m.value === selectedMonth)?.label}
-              </CardTitle>
-              <Button
-                onClick={handleGeneratePayroll}
-                disabled={isGenerating}
-              >
-                {isGenerating ? (
-                  <>
-                    <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
-                    Generating...
-                  </>
-                ) : payrollGenerated ? (
-                  <>
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Regenerate
-                  </>
-                ) : (
-                  <>
-                    <Calculator className="h-4 w-4 mr-2" />
-                    Generate Payroll
-                  </>
-                )}
-              </Button>
-            </div>
+            <CardTitle>Payroll Records</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Employee</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Hours</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Overtime</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Rate</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Regular Pay</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">OT Pay</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Gross Pay</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payrollData.map((record, index) => (
-                    <tr
-                      key={record.employee.id}
-                      className="border-b border-border/30 animate-slide-up"
-                      style={{ animationDelay: `${0.2 + index * 0.05}s` }}
-                    >
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-xs font-semibold text-primary">
-                              {record.employee.name.split(' ').map((n) => n[0]).join('')}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="font-medium">{record.employee.name}</p>
-                            <p className="text-xs text-muted-foreground">{record.employee.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-right">{record.hoursWorked.toFixed(1)}h</td>
-                      <td className="py-4 px-4 text-right">
-                        <span className={cn(
-                          record.overtime > 0 && "text-warning font-medium"
-                        )}>
-                          {record.overtime.toFixed(1)}h
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-right">{formatCurrency(record.employee.hourlyRate || 25)}/hr</td>
-                      <td className="py-4 px-4 text-right">{formatCurrency(record.regularPay)}</td>
-                      <td className="py-4 px-4 text-right">{formatCurrency(record.overtimePay)}</td>
-                      <td className="py-4 px-4 text-right font-semibold text-primary">
-                        {formatCurrency(record.grossPay)}
-                      </td>
+            {loading ? (
+              <div className="flex justify-center p-8">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : payrollRecords.length === 0 ? (
+              <div className="text-center p-8 text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>No payroll records found for this month.</p>
+                <p className="text-sm mt-2">Click "Generate Payroll" to calculate.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b text-left text-sm text-muted-foreground">
+                      <th className="p-4 font-medium">Employee</th>
+                      <th className="p-4 font-medium">Hours</th>
+                      <th className="p-4 font-medium">Overtime</th>
+                      <th className="p-4 font-medium">Regular Pay</th>
+                      <th className="p-4 font-medium">Overtime Pay</th>
+                      <th className="p-4 font-medium">Gross Pay</th>
+                      <th className="p-4 font-medium">Status</th>
+                      <th className="p-4 font-medium text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-secondary/30">
-                    <td className="py-4 px-4 font-semibold">Total</td>
-                    <td className="py-4 px-4 text-right font-semibold">
-                      {payrollData.reduce((sum, p) => sum + p.hoursWorked, 0).toFixed(1)}h
-                    </td>
-                    <td className="py-4 px-4 text-right font-semibold">
-                      {payrollData.reduce((sum, p) => sum + p.overtime, 0).toFixed(1)}h
-                    </td>
-                    <td className="py-4 px-4 text-right">-</td>
-                    <td className="py-4 px-4 text-right font-semibold">
-                      {formatCurrency(payrollData.reduce((sum, p) => sum + p.regularPay, 0))}
-                    </td>
-                    <td className="py-4 px-4 text-right font-semibold">
-                      {formatCurrency(payrollData.reduce((sum, p) => sum + p.overtimePay, 0))}
-                    </td>
-                    <td className="py-4 px-4 text-right font-bold text-lg text-primary">
-                      {formatCurrency(totalStats.totalPayroll)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {payrollRecords.map((record) => (
+                      <tr key={record.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                        <td className="p-4">
+                          <div>
+                            <p className="font-medium">{record.employee?.name || 'Unknown'}</p>
+                            <p className="text-sm text-muted-foreground">{record.employee?.email}</p>
+                          </div>
+                        </td>
+                        <td className="p-4">{record.totalHours.toFixed(1)}</td>
+                        <td className="p-4">{record.overtimeHours.toFixed(1)}</td>
+                        <td className="p-4">{formatCurrency(record.regularPay)}</td>
+                        <td className="p-4">{formatCurrency(record.overtimePay)}</td>
+                        <td className="p-4 font-bold">{formatCurrency(record.grossPay)}</td>
+                        <td className="p-4">
+                          <span className={cn(
+                            "px-2 py-1 rounded-full text-xs font-medium",
+                            record.status === 'paid' 
+                              ? "bg-green-500/10 text-green-500" 
+                              : "bg-yellow-500/10 text-yellow-500"
+                          )}>
+                            {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          {record.status !== 'paid' && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="mr-2"
+                              onClick={() => handleMarkAsPaid(record)}
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Mark Paid
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

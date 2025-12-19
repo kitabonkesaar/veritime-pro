@@ -1,90 +1,79 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { EmployeeAttendanceTable } from '@/components/dashboard/EmployeeAttendanceTable';
 import { PayrollSummary } from '@/components/dashboard/PayrollSummary';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, UserCheck, UserX, Clock, LayoutDashboard, DollarSign, Calendar } from 'lucide-react';
-import { User, AttendanceLog } from '@/types';
-
-// Mock data
-const mockEmployees: (User & { todayLog?: AttendanceLog })[] = [
-  {
-    id: '2',
-    name: 'John Smith',
-    email: 'john@company.com',
-    role: 'employee',
-    hourlyRate: 25,
-    createdAt: new Date(),
-    todayLog: {
-      id: '1',
-      userId: '2',
-      date: new Date().toISOString().split('T')[0],
-      clockInTime: new Date(Date.now() - 14400000),
-      clockInPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john',
-      clockOutTime: null,
-      clockOutPhotoUrl: null,
-      totalHours: null,
-      createdAt: new Date(),
-    }
-  },
-  {
-    id: '3',
-    name: 'Sarah Johnson',
-    email: 'sarah@company.com',
-    role: 'employee',
-    hourlyRate: 30,
-    createdAt: new Date(),
-    todayLog: {
-      id: '2',
-      userId: '3',
-      date: new Date().toISOString().split('T')[0],
-      clockInTime: new Date(Date.now() - 21600000),
-      clockInPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah',
-      clockOutTime: new Date(Date.now() - 3600000),
-      clockOutPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah2',
-      totalHours: 5,
-      createdAt: new Date(),
-    }
-  },
-  {
-    id: '4',
-    name: 'Mike Davis',
-    email: 'mike@company.com',
-    role: 'employee',
-    hourlyRate: 28,
-    createdAt: new Date(),
-  },
-  {
-    id: '5',
-    name: 'Emily Brown',
-    email: 'emily@company.com',
-    role: 'employee',
-    hourlyRate: 32,
-    createdAt: new Date(),
-    todayLog: {
-      id: '3',
-      userId: '5',
-      date: new Date().toISOString().split('T')[0],
-      clockInTime: new Date(Date.now() - 18000000),
-      clockInPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=emily',
-      clockOutTime: null,
-      clockOutPhotoUrl: null,
-      totalHours: null,
-      createdAt: new Date(),
-    }
-  },
-];
+import { Users, UserCheck, UserX, Clock, LayoutDashboard, IndianRupee, Calendar } from 'lucide-react';
+import { User, AttendanceLog, PayrollRecord } from '@/types';
+import { employeesService } from '@/services/employees';
+import { attendanceService } from '@/services/attendance';
+import { payrollService } from '@/services/payroll';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
+  const [employees, setEmployees] = useState<(User & { todayLog?: AttendanceLog })[]>([]);
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const totalEmployees = mockEmployees.length;
-  const presentToday = mockEmployees.filter(e => e.todayLog?.clockInTime).length;
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const currentMonth = today.slice(0, 7); // YYYY-MM
+
+        const [users, logs, payrolls] = await Promise.all([
+          employeesService.getEmployees(),
+          attendanceService.getAllLogs(today),
+          payrollService.getPayrollRecords(currentMonth)
+        ]);
+
+        const employeesWithLogs = users.map(user => {
+          const todayLog = logs.find(log => log.userId === user.id);
+          return {
+            ...user,
+            todayLog
+          };
+        });
+
+        setEmployees(employeesWithLogs);
+        setPayrollRecords(payrolls);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const totalEmployees = employees.length;
+  const presentToday = employees.filter(e => e.todayLog?.clockInTime).length;
   const absentToday = totalEmployees - presentToday;
-  const averageHours = 7.5;
+  
+  // Calculate average hours for today for employees who have clocked out
+  const completedLogs = employees.filter(e => e.todayLog?.totalHours);
+  const totalHoursToday = completedLogs.reduce((acc, curr) => acc + (curr.todayLog?.totalHours || 0), 0);
+  const averageHours = completedLogs.length > 0 
+    ? parseFloat((totalHoursToday / completedLogs.length).toFixed(1)) 
+    : 0;
+
+  // Calculate payroll totals
+  const totalPayrollHours = payrollRecords.reduce((acc, curr) => acc + curr.totalHours, 0);
+  const totalPayrollAmount = payrollRecords.reduce((acc, curr) => acc + curr.grossPay, 0);
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-[calc(100vh-100px)]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -110,7 +99,6 @@ export default function AdminDashboard() {
             value={presentToday}
             icon={UserCheck}
             variant="success"
-            trend={{ value: 12, isPositive: true }}
             delay={0.1}
           />
           <StatsCard
@@ -142,24 +130,24 @@ export default function AdminDashboard() {
               <span className="hidden sm:inline">Attendance</span>
             </TabsTrigger>
             <TabsTrigger value="payroll" className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
+              <IndianRupee className="h-4 w-4" />
               <span className="hidden sm:inline">Payroll</span>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <EmployeeAttendanceTable employees={mockEmployees} />
+            <EmployeeAttendanceTable employees={employees} />
           </TabsContent>
 
           <TabsContent value="attendance" className="space-y-6">
-            <EmployeeAttendanceTable employees={mockEmployees} />
+            <EmployeeAttendanceTable employees={employees} />
           </TabsContent>
 
           <TabsContent value="payroll" className="space-y-6">
             <PayrollSummary 
-              employees={mockEmployees}
-              totalHours={168}
-              totalPayroll={4620}
+              records={payrollRecords}
+              totalHours={totalPayrollHours}
+              totalPayroll={totalPayrollAmount}
             />
           </TabsContent>
         </Tabs>
@@ -167,3 +155,4 @@ export default function AdminDashboard() {
     </AppLayout>
   );
 }
+

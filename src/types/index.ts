@@ -6,6 +6,7 @@ export interface User {
   email: string;
   role: UserRole;
   hourlyRate?: number;
+  tripRate?: number;
   monthlySalary?: number;
   avatarUrl?: string;
   createdAt: Date;
@@ -28,8 +29,13 @@ export interface PayrollRecord {
   userId: string;
   month: string;
   totalHours: number;
-  grossSalary: number;
+  regularPay: number;
+  overtimeHours: number;
+  overtimePay: number;
+  grossPay: number;
+  status: 'generated' | 'paid';
   createdAt: Date;
+  employee?: User; // Joined data
 }
 
 export interface AttendanceStatus {
@@ -44,4 +50,17 @@ export interface DashboardStats {
   presentToday: number;
   absentToday: number;
   averageHours: number;
+}
+
+export interface CompanySettings {
+  id: string;
+  companyName: string;
+  workingHoursStart: string;
+  workingHoursEnd: string;
+  overtimeRate: number;
+  autoCheckout: boolean;
+  autoCheckoutTime: string;
+  notificationsEnabled: boolean;
+  requirePhoto: boolean;
+  updatedAt: Date;
 }

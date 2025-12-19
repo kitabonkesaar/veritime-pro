@@ -7,7 +7,7 @@ import {
   Clock,
   Users,
   Calendar,
-  DollarSign,
+  IndianRupee,
   Settings,
   Image,
   User,
@@ -31,7 +31,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/employees', icon: Users, label: 'Employees' },
     { to: '/attendance-gallery', icon: Image, label: 'Attendance' },
-    { to: '/payroll', icon: DollarSign, label: 'Payroll' },
+    { to: '/payroll', icon: IndianRupee, label: 'Payroll' },
     { to: '/settings', icon: Settings, label: 'Settings' },
   ];
 

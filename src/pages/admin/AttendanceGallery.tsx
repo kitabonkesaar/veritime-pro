@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,67 +22,51 @@ import {
 import { AttendanceLog, User } from '@/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-
-// Mock data
-const mockAttendanceLogs: (AttendanceLog & { user: User })[] = [
-  {
-    id: '1',
-    userId: '2',
-    date: new Date().toISOString().split('T')[0],
-    clockInTime: new Date(Date.now() - 14400000),
-    clockInPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john',
-    clockOutTime: null,
-    clockOutPhotoUrl: null,
-    totalHours: null,
-    createdAt: new Date(),
-    user: { id: '2', name: 'John Smith', email: 'john@company.com', role: 'employee', hourlyRate: 25, createdAt: new Date() },
-  },
-  {
-    id: '2',
-    userId: '3',
-    date: new Date().toISOString().split('T')[0],
-    clockInTime: new Date(Date.now() - 21600000),
-    clockInPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah',
-    clockOutTime: new Date(Date.now() - 3600000),
-    clockOutPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah2',
-    totalHours: 5,
-    createdAt: new Date(),
-    user: { id: '3', name: 'Sarah Johnson', email: 'sarah@company.com', role: 'employee', hourlyRate: 30, createdAt: new Date() },
-  },
-  {
-    id: '3',
-    userId: '5',
-    date: new Date().toISOString().split('T')[0],
-    clockInTime: new Date(Date.now() - 18000000),
-    clockInPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=emily',
-    clockOutTime: null,
-    clockOutPhotoUrl: null,
-    totalHours: null,
-    createdAt: new Date(),
-    user: { id: '5', name: 'Emily Brown', email: 'emily@company.com', role: 'employee', hourlyRate: 32, createdAt: new Date() },
-  },
-  {
-    id: '4',
-    userId: '2',
-    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    clockInTime: new Date(Date.now() - 86400000 + 32400000),
-    clockInPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john-yday',
-    clockOutTime: new Date(Date.now() - 86400000 + 64800000),
-    clockOutPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=john-yday2',
-    totalHours: 9,
-    createdAt: new Date(),
-    user: { id: '2', name: 'John Smith', email: 'john@company.com', role: 'employee', hourlyRate: 25, createdAt: new Date() },
-  },
-];
+import { attendanceService } from '@/services/attendance';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AttendanceGallery() {
-  const [logs] = useState(mockAttendanceLogs);
+  const { toast } = useToast();
+  const [logs, setLogs] = useState<(AttendanceLog & { user?: User })[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'complete' | 'working'>('all');
 
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setLoading(true);
+      try {
+        // If selectedDate is present, we could filter by it on server side, 
+        // but for now let's fetch all or let the client filter if the dataset is small.
+        // Actually, let's fetch all to allow client-side search across dates if date is cleared.
+        // Or if date is selected, maybe we should just fetch that date?
+        // Let's use the getAllLogs without date param to fetch everything and filter client side
+        // to match existing logic which allows clearing date.
+        // Warning: This might get heavy. 
+        // Alternative: If selectedDate is set, fetch for that date. If not, fetch all?
+        // Let's just fetch all for now as requested "check the whole app".
+        
+        const data = await attendanceService.getAllLogs();
+        setLogs(data);
+      } catch (error) {
+        console.error('Error fetching logs:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load attendance gallery',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLogs();
+  }, [toast]);
+
   const filteredLogs = logs.filter((log) => {
-    const matchesSearch = log.user.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = log.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          log.user?.email?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesDate = selectedDate
       ? log.date === format(selectedDate, 'yyyy-MM-dd')
       : true;
@@ -241,11 +225,11 @@ export default function AttendanceGallery() {
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <span className="text-sm font-semibold text-primary">
-                          {log.user.name.split(' ').map((n) => n[0]).join('')}
+                          {log.user?.name?.split(' ').map((n) => n[0]).join('') || '?'}
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium">{log.user.name}</p>
+                        <p className="font-medium">{log.user?.name || 'Unknown'}</p>
                         <p className="text-xs text-muted-foreground">{log.date}</p>
                       </div>
                     </div>

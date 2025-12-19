@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   User, 
   Mail, 
-  DollarSign, 
+  IndianRupee, 
   Calendar,
   Lock,
   Save,
@@ -92,7 +92,7 @@ export default function Profile() {
                 <p className="text-muted-foreground capitalize">{user?.role}</p>
                 <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <DollarSign className="h-4 w-4" />
+                    <IndianRupee className="h-4 w-4" />
                     {formatCurrency(user?.hourlyRate || 0)}/hr
                   </span>
                   <span className="flex items-center gap-1">

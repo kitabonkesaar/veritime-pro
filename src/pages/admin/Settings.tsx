@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,15 +8,19 @@ import {
   Settings as SettingsIcon, 
   Building, 
   Clock, 
-  DollarSign, 
+  IndianRupee, 
   Bell,
   Shield,
-  Save
+  Save,
+  Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { settingsService } from '@/services/settings';
 
 export default function Settings() {
   const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
     companyName: 'Acme Corporation',
     workingHoursStart: '09:00',
@@ -28,22 +32,91 @@ export default function Settings() {
     requirePhoto: true,
   });
 
-  const handleSave = () => {
-    toast({
-      title: 'Settings Saved',
-      description: 'Your settings have been updated successfully.',
-    });
+  const loadSettings = useCallback(async () => {
+    try {
+      const data = await settingsService.getSettings();
+      if (data) {
+        setSettings({
+          companyName: data.companyName,
+          workingHoursStart: data.workingHoursStart,
+          workingHoursEnd: data.workingHoursEnd,
+          overtimeRate: data.overtimeRate,
+          autoCheckout: data.autoCheckout,
+          autoCheckoutTime: data.autoCheckoutTime,
+          notifications: data.notificationsEnabled,
+          requirePhoto: data.requirePhoto,
+        });
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load settings',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await settingsService.updateSettings({
+        companyName: settings.companyName,
+        workingHoursStart: settings.workingHoursStart,
+        workingHoursEnd: settings.workingHoursEnd,
+        overtimeRate: settings.overtimeRate,
+        autoCheckout: settings.autoCheckout,
+        autoCheckoutTime: settings.autoCheckoutTime,
+        notificationsEnabled: settings.notifications,
+        requirePhoto: settings.requirePhoto,
+      });
+      toast({
+        title: 'Settings Saved',
+        description: 'Your settings have been updated successfully.',
+      });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to save settings',
+      });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
       <div className="space-y-6 max-w-3xl">
         {/* Header */}
-        <div className="animate-fade-in">
-          <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">
-            Configure your attendance and payroll system
-          </p>
+        <div className="animate-fade-in flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Settings</h1>
+            <p className="text-muted-foreground">
+              Configure your attendance and payroll system
+            </p>
+          </div>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Save Changes
+          </Button>
         </div>
 
         {/* Company Settings */}
@@ -127,7 +200,7 @@ export default function Settings() {
         <Card variant="glass" className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
+              <IndianRupee className="h-5 w-5 text-primary" />
               Payroll Settings
             </CardTitle>
             <CardDescription>
@@ -204,11 +277,11 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Save Button */}
-        <div className="flex justify-end">
-          <Button onClick={handleSave} size="lg">
-            <Save className="h-4 w-4 mr-2" />
-            Save Settings
+        {/* Floating Save Button */}
+        <div className="fixed bottom-6 right-6">
+          <Button size="lg" className="shadow-lg" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Save Changes
           </Button>
         </div>
       </div>

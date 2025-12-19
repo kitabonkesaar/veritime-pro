@@ -1,20 +1,20 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DollarSign, Download, Calculator } from 'lucide-react';
-import { User } from '@/types';
+import { IndianRupee, Download, Calculator } from 'lucide-react';
+import { PayrollRecord } from '@/types';
 
 interface PayrollSummaryProps {
-  employees: User[];
+  records: PayrollRecord[];
   totalHours: number;
   totalPayroll: number;
 }
 
-export function PayrollSummary({ employees, totalHours, totalPayroll }: PayrollSummaryProps) {
+export function PayrollSummary({ records, totalHours, totalPayroll }: PayrollSummaryProps) {
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'INR',
     }).format(amount);
   };
 
@@ -23,7 +23,7 @@ export function PayrollSummary({ employees, totalHours, totalPayroll }: PayrollS
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-primary" />
+            <IndianRupee className="h-5 w-5 text-primary" />
             Payroll Summary
           </CardTitle>
           <Button variant="outline" size="sm">
@@ -36,7 +36,7 @@ export function PayrollSummary({ employees, totalHours, totalPayroll }: PayrollS
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="p-4 rounded-xl bg-secondary/50 text-center">
             <p className="text-sm text-muted-foreground">Total Employees</p>
-            <p className="text-2xl font-bold mt-1">{employees.length}</p>
+            <p className="text-2xl font-bold mt-1">{records.length}</p>
           </div>
           <div className="p-4 rounded-xl bg-secondary/50 text-center">
             <p className="text-sm text-muted-foreground">Total Hours</p>
@@ -59,26 +59,33 @@ export function PayrollSummary({ employees, totalHours, totalPayroll }: PayrollS
               </tr>
             </thead>
             <tbody>
-              {employees.map((employee, index) => {
-                const hours = 40 + Math.random() * 10; // Mock data
-                const amount = hours * (employee.hourlyRate || 25);
+              {records.map((record) => {
+                const employeeName = record.employee?.name || 'Unknown';
+                const hourlyRate = record.employee?.hourlyRate || 0;
                 
                 return (
                   <tr 
-                    key={employee.id}
+                    key={record.id}
                     className="border-b border-border/30"
                   >
                     <td className="py-3 px-4">
-                      <p className="font-medium">{employee.name}</p>
+                      <p className="font-medium">{employeeName}</p>
                     </td>
-                    <td className="py-3 px-4 text-right">{hours.toFixed(1)}h</td>
-                    <td className="py-3 px-4 text-right">{formatCurrency(employee.hourlyRate || 25)}/hr</td>
+                    <td className="py-3 px-4 text-right">{record.totalHours.toFixed(1)}h</td>
+                    <td className="py-3 px-4 text-right">{formatCurrency(hourlyRate)}/hr</td>
                     <td className="py-3 px-4 text-right font-semibold text-primary">
-                      {formatCurrency(amount)}
+                      {formatCurrency(record.grossPay)}
                     </td>
                   </tr>
                 );
               })}
+              {records.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                    No payroll records generated for this month.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -93,3 +100,4 @@ export function PayrollSummary({ employees, totalHours, totalPayroll }: PayrollS
     </Card>
   );
 }
+

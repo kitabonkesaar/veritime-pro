@@ -18,53 +18,39 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AttendanceLog } from '@/types';
+import { attendanceService } from '@/services/attendance';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 
-// Generate mock history data
-const generateMockLogs = (userId: string): AttendanceLog[] => {
-  const logs: AttendanceLog[] = [];
-  const today = new Date();
-  
-  for (let i = 1; i <= 30; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    
-    // Skip weekends
-    if (date.getDay() === 0 || date.getDay() === 6) continue;
-    
-    // 90% attendance rate
-    if (Math.random() > 0.1) {
-      const clockIn = new Date(date);
-      clockIn.setHours(8 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 60), 0);
-      
-      const clockOut = new Date(date);
-      clockOut.setHours(17 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 60), 0);
-      
-      const totalHours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
-      
-      logs.push({
-        id: i.toString(),
-        userId,
-        date: date.toISOString().split('T')[0],
-        clockInTime: clockIn,
-        clockInPhotoUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${i}`,
-        clockOutTime: clockOut,
-        clockOutPhotoUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${i + 100}`,
-        totalHours,
-        createdAt: date,
-      });
-    }
-  }
-  
-  return logs;
-};
-
 export default function History() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [logs] = useState(() => generateMockLogs(user?.id || ''));
+  const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const fetchLogs = async () => {
+      if (!user?.id) return;
+      try {
+        const data = await attendanceService.getLogs(user.id);
+        setLogs(data);
+      } catch (error) {
+        console.error('Error fetching logs:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load attendance history',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLogs();
+  }, [user?.id, toast]);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);

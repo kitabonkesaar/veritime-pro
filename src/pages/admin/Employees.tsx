@@ -1,19 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  Users, 
-  Plus, 
-  Search, 
-  Mail, 
-  Phone, 
-  DollarSign,
-  Edit,
-  Trash2,
-  MoreVertical
-} from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -21,63 +17,90 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { 
+  Plus, 
+  Search, 
+  MoreHorizontal, 
+  Pencil, 
+  Trash2, 
+  Loader2,
+  IndianRupee,
+  Mail,
+  User as UserIcon
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { User } from '@/types';
-import { cn } from '@/lib/utils';
-
-// Mock employees data
-const mockEmployees: User[] = [
-  {
-    id: '2',
-    name: 'John Smith',
-    email: 'john@company.com',
-    role: 'employee',
-    hourlyRate: 25,
-    createdAt: new Date('2024-01-15'),
-  },
-  {
-    id: '3',
-    name: 'Sarah Johnson',
-    email: 'sarah@company.com',
-    role: 'employee',
-    hourlyRate: 30,
-    createdAt: new Date('2024-02-20'),
-  },
-  {
-    id: '4',
-    name: 'Mike Davis',
-    email: 'mike@company.com',
-    role: 'employee',
-    hourlyRate: 28,
-    createdAt: new Date('2024-03-10'),
-  },
-  {
-    id: '5',
-    name: 'Emily Brown',
-    email: 'emily@company.com',
-    role: 'employee',
-    hourlyRate: 32,
-    createdAt: new Date('2024-04-05'),
-  },
-];
+import { employeesService } from '@/services/employees';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function Employees() {
-  const [employees, setEmployees] = useState(mockEmployees);
+  const [employees, setEmployees] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Dialog States
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Forms
+  const [addForm, setAddForm] = useState({
     name: '',
     email: '',
+    password: '',
     hourlyRate: '',
+    tripRate: ''
   });
+
+  const [editForm, setEditForm] = useState({
+    name: '',
+    hourlyRate: '',
+    tripRate: ''
+  });
+
   const { toast } = useToast();
+
+  const loadEmployees = useCallback(async () => {
+    try {
+      const data = await employeesService.getEmployees();
+      setEmployees(data);
+    } catch (error) {
+      console.error('Error loading employees:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load employees',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    loadEmployees();
+  }, [loadEmployees]);
 
   const filteredEmployees = employees.filter(
     (emp) =>
@@ -85,51 +108,130 @@ export default function Employees() {
       emp.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAddEmployee = (e: React.FormEvent) => {
+  // Handlers
+  const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
-    const employee: User = {
-      id: Date.now().toString(),
-      name: newEmployee.name,
-      email: newEmployee.email,
-      role: 'employee',
-      hourlyRate: parseFloat(newEmployee.hourlyRate),
-      createdAt: new Date(),
-    };
-    setEmployees([...employees, employee]);
-    setNewEmployee({ name: '', email: '', hourlyRate: '' });
-    setIsAddDialogOpen(false);
-    toast({
-      title: 'Employee Added',
-      description: `${employee.name} has been added successfully.`,
-    });
+    setActionLoading(true);
+    try {
+      await employeesService.createEmployee({
+        name: addForm.name,
+        email: addForm.email,
+        password: addForm.password,
+        hourlyRate: parseFloat(addForm.hourlyRate) || 0,
+        tripRate: parseFloat(addForm.tripRate) || 0
+      });
+
+      toast({
+        title: 'Employee Added',
+        description: 'New employee account has been created successfully.',
+      });
+      setIsAddDialogOpen(false);
+      setAddForm({ name: '', email: '', password: '', hourlyRate: '', tripRate: '' });
+      loadEmployees();
+    } catch (error: any) {
+      console.error('Error adding employee:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to create employee',
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleDeleteEmployee = (id: string) => {
-    setEmployees(employees.filter((emp) => emp.id !== id));
-    toast({
-      title: 'Employee Removed',
-      description: 'Employee has been removed from the system.',
+  const handleEditClick = (employee: User) => {
+    setSelectedEmployee(employee);
+    setEditForm({
+      name: employee.name,
+      hourlyRate: employee.hourlyRate?.toString() || '',
+      tripRate: employee.tripRate?.toString() || '',
     });
+    setIsEditDialogOpen(true);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
+  const handleUpdateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmployee) return;
+    setActionLoading(true);
+
+    try {
+      await employeesService.updateEmployee(selectedEmployee.id, {
+        name: editForm.name,
+        hourlyRate: parseFloat(editForm.hourlyRate) || 0,
+        tripRate: parseFloat(editForm.tripRate) || 0,
+      });
+      
+      toast({
+        title: 'Employee Updated',
+        description: 'Employee details have been updated successfully.',
+      });
+      
+      setIsEditDialogOpen(false);
+      loadEmployees();
+    } catch (error: any) {
+      console.error('Error updating employee:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to update employee',
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
+
+  const handleDeleteClick = (employee: User) => {
+    setSelectedEmployee(employee);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedEmployee) return;
+    setActionLoading(true);
+
+    try {
+      await employeesService.deleteEmployeeProfile(selectedEmployee.id);
+      toast({
+        title: 'Employee Removed',
+        description: 'Employee profile has been removed.',
+      });
+      setIsDeleteDialogOpen(false);
+      loadEmployees();
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to remove employee',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Employee Management</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Employees</h1>
             <p className="text-muted-foreground">
-              Manage your team members and their details
+              Manage your team members, rates, and access.
             </p>
           </div>
+          
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -141,179 +243,241 @@ export default function Employees() {
               <DialogHeader>
                 <DialogTitle>Add New Employee</DialogTitle>
                 <DialogDescription>
-                  Enter the details of the new employee
+                  Create a new employee account. They can login using these credentials.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleAddEmployee} className="space-y-4 mt-4">
+              <form onSubmit={handleAddEmployee} className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Full Name</label>
                   <Input
                     placeholder="John Doe"
-                    value={newEmployee.name}
-                    onChange={(e) =>
-                      setNewEmployee({ ...newEmployee, name: e.target.value })
-                    }
+                    value={addForm.name}
+                    onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Email Address</label>
+                  <label className="text-sm font-medium">Email</label>
                   <Input
                     type="email"
-                    placeholder="john@company.com"
-                    value={newEmployee.email}
-                    onChange={(e) =>
-                      setNewEmployee({ ...newEmployee, email: e.target.value })
-                    }
+                    placeholder="john@example.com"
+                    value={addForm.email}
+                    onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Hourly Rate ($)</label>
+                  <label className="text-sm font-medium">Password</label>
                   <Input
-                    type="number"
-                    placeholder="25.00"
-                    value={newEmployee.hourlyRate}
-                    onChange={(e) =>
-                      setNewEmployee({ ...newEmployee, hourlyRate: e.target.value })
-                    }
+                    type="password"
+                    placeholder="Min. 6 characters"
+                    value={addForm.password}
+                    onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
                     required
+                    minLength={6}
                   />
                 </div>
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsAddDialogOpen(false)}
-                  >
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Hourly Rate (₹)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={addForm.hourlyRate}
+                      onChange={(e) => setAddForm({ ...addForm, hourlyRate: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Trip Rate (₹)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={addForm.tripRate}
+                      onChange={(e) => setAddForm({ ...addForm, tripRate: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit">Add Employee</Button>
-                </div>
+                  <Button type="submit" disabled={actionLoading}>
+                    {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Create Account
+                  </Button>
+                </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
         </div>
 
-        {/* Search and Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-          <div className="md:col-span-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search employees..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+        {/* Filters */}
+        <div className="flex items-center py-4">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Filter by name or email..."
+              className="pl-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
-          <Card variant="glass" className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total</p>
-                <p className="text-xl font-bold">{employees.length}</p>
-              </div>
-            </div>
-          </Card>
-          <Card variant="glass" className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-accent/10">
-                <DollarSign className="h-5 w-5 text-accent" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Avg Rate</p>
-                <p className="text-xl font-bold">
-                  {formatCurrency(
-                    employees.reduce((sum, e) => sum + (e.hourlyRate || 0), 0) /
-                      employees.length
-                  )}
-                </p>
-              </div>
-            </div>
-          </Card>
         </div>
 
-        {/* Employee Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredEmployees.map((employee, index) => (
-            <Card
-              key={employee.id}
-              variant="glass"
-              className="animate-slide-up hover:shadow-lg transition-shadow"
-              style={{ animationDelay: `${0.1 + index * 0.05}s` }}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-lg font-semibold text-primary">
-                        {employee.name.split(' ').map((n) => n[0]).join('')}
-                      </span>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">{employee.name}</h3>
-                      <p className="text-sm text-muted-foreground">{employee.email}</p>
-                    </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleDeleteEmployee(employee.id)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Hourly Rate</p>
-                    <p className="font-semibold text-primary">
-                      {formatCurrency(employee.hourlyRate || 0)}/hr
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Joined</p>
-                    <p className="font-medium">
-                      {new Date(employee.createdAt).toLocaleDateString('en-US', {
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        {/* Table */}
+        <div className="rounded-md border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Hourly Rate</TableHead>
+                <TableHead>Trip Rate</TableHead>
+                <TableHead>Joined</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredEmployees.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-24 text-center">
+                    No employees found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredEmployees.map((employee) => (
+                  <TableRow key={employee.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={employee.avatarUrl} />
+                          <AvatarFallback>
+                            {employee.name.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{employee.name}</span>
+                          <span className="text-xs text-muted-foreground">{employee.email}</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="capitalize">{employee.role}</TableCell>
+                    <TableCell>₹{employee.hourlyRate || 0}/hr</TableCell>
+                    <TableCell>₹{employee.tripRate || 0}/trip</TableCell>
+                    <TableCell>
+                      {new Date(employee.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleEditClick(employee)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit Details
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleDeleteClick(employee)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Employee
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
 
-        {filteredEmployees.length === 0 && (
-          <Card variant="glass" className="p-12 text-center">
-            <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-            <h3 className="text-lg font-medium mb-1">No Employees Found</h3>
-            <p className="text-muted-foreground">
-              {searchQuery
-                ? 'Try adjusting your search query'
-                : 'Add your first employee to get started'}
-            </p>
-          </Card>
-        )}
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Employee</DialogTitle>
+              <DialogDescription>
+                Update employee details and compensation rates.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleUpdateEmployee} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Full Name</label>
+                <Input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Hourly Rate (₹)</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editForm.hourlyRate}
+                    onChange={(e) => setEditForm({ ...editForm, hourlyRate: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Trip Rate (₹)</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editForm.tripRate}
+                    onChange={(e) => setEditForm({ ...editForm, tripRate: e.target.value })}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={actionLoading}>
+                  {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the employee profile 
+                for <strong>{selectedEmployee?.name}</strong>. 
+                <br /><br />
+                Note: The user account will remain in the authentication system but they will 
+                lose access to the application data.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );

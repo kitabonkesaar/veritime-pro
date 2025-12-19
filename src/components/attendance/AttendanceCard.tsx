@@ -104,16 +104,12 @@ export function AttendanceCard({ status, onClockIn, onClockOut }: AttendanceCard
 
           {/* Action Buttons */}
           <div className="flex gap-3">
-            {!status.isClockedIn ? (
-              <Button 
-                className="flex-1" 
-                size="xl"
-                onClick={() => handleClockAction('clock-in')}
-              >
-                <LogIn className="h-5 w-5 mr-2" />
-                Clock In
-              </Button>
-            ) : !status.clockOutTime ? (
+            {status.clockOutTime ? (
+              <div className="flex-1 flex items-center justify-center p-4 rounded-xl bg-accent/10 text-accent">
+                <CheckCircle2 className="h-5 w-5 mr-2" />
+                <span className="font-medium">Attendance Complete for Today</span>
+              </div>
+            ) : status.isClockedIn ? (
               <Button 
                 variant="success" 
                 className="flex-1" 
@@ -124,10 +120,14 @@ export function AttendanceCard({ status, onClockIn, onClockOut }: AttendanceCard
                 Clock Out
               </Button>
             ) : (
-              <div className="flex-1 flex items-center justify-center p-4 rounded-xl bg-accent/10 text-accent">
-                <CheckCircle2 className="h-5 w-5 mr-2" />
-                <span className="font-medium">Attendance Complete for Today</span>
-              </div>
+              <Button 
+                className="flex-1" 
+                size="xl"
+                onClick={() => handleClockAction('clock-in')}
+              >
+                <LogIn className="h-5 w-5 mr-2" />
+                Clock In
+              </Button>
             )}
           </div>
         </CardContent>

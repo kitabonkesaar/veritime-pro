@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { AttendanceCard } from '@/components/attendance/AttendanceCard';
 import { AttendanceHistory } from '@/components/attendance/AttendanceHistory';
 import { AttendanceStatus, AttendanceLog } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { attendanceService } from '@/services/attendance';
 
 export default function EmployeeDashboard() {
   const { user } = useAuth();
@@ -18,68 +19,88 @@ export default function EmployeeDashboard() {
   });
 
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [currentLogId, setCurrentLogId] = useState<string | null>(null);
+
+  const fetchLogs = useCallback(async () => {
+    if (!user) return;
+    try {
+      const data = await attendanceService.getLogs(user.id);
+      setLogs(data);
+
+      // Check for today's log to set status
+      const todayLog = await attendanceService.getTodayStatus(user.id);
+      if (todayLog) {
+        setCurrentLogId(todayLog.id);
+        setStatus({
+          isClockedIn: !todayLog.clock_out_time,
+          clockInTime: todayLog.clock_in_time ? new Date(todayLog.clock_in_time) : null,
+          clockOutTime: todayLog.clock_out_time ? new Date(todayLog.clock_out_time) : null,
+          totalHoursToday: todayLog.total_hours,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to load attendance records", 
+        variant: "destructive" 
+      });
+    }
+  }, [user, toast]);
 
   useEffect(() => {
-    const mockLogs: AttendanceLog[] = [
-      {
-        id: '1',
-        userId: user?.id || '',
-        date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-        clockInTime: new Date(Date.now() - 86400000 + 32400000),
-        clockInPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=1',
-        clockOutTime: new Date(Date.now() - 86400000 + 64800000),
-        clockOutPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=2',
-        totalHours: 9,
-        createdAt: new Date(),
-      },
-      {
-        id: '2',
-        userId: user?.id || '',
-        date: new Date(Date.now() - 172800000).toISOString().split('T')[0],
-        clockInTime: new Date(Date.now() - 172800000 + 30600000),
-        clockInPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=3',
-        clockOutTime: new Date(Date.now() - 172800000 + 63000000),
-        clockOutPhotoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=4',
-        totalHours: 9,
-        createdAt: new Date(),
-      },
-    ];
-    setLogs(mockLogs);
-  }, [user]);
+    fetchLogs();
+  }, [fetchLogs]);
 
-  const handleClockIn = (photoUrl: string) => {
-    const now = new Date();
-    setStatus({
-      isClockedIn: true,
-      clockInTime: now,
-      clockOutTime: null,
-      totalHoursToday: null,
-    });
-    toast({ title: "Clocked In Successfully", description: `You clocked in at ${now.toLocaleTimeString()}` });
+  const handleClockIn = async (photoUrl: string) => {
+    if (!user) return;
+    try {
+      const log = await attendanceService.clockIn(user.id, photoUrl);
+      setCurrentLogId(log.id);
+      
+      const now = new Date();
+      setStatus({
+        isClockedIn: true,
+        clockInTime: now,
+        clockOutTime: null,
+        totalHoursToday: null,
+      });
+      
+      toast({ title: "Clocked In Successfully", description: `You clocked in at ${now.toLocaleTimeString()}` });
+      fetchLogs(); // Refresh logs
+    } catch (error) {
+      console.error('Error clocking in:', error);
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : "Failed to clock in", 
+        variant: "destructive" 
+      });
+    }
   };
 
-  const handleClockOut = (photoUrl: string) => {
-    const now = new Date();
-    const clockInTime = status.clockInTime;
-    let totalHours = null;
-    if (clockInTime) {
-      totalHours = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
-    }
-    setStatus(prev => ({ ...prev, clockOutTime: now, totalHoursToday: totalHours }));
+  const handleClockOut = async (photoUrl: string) => {
+    if (!currentLogId) return;
+    try {
+      const log = await attendanceService.clockOut(currentLogId, photoUrl);
+      
+      const now = new Date();
+      setStatus(prev => ({ 
+        ...prev, 
+        isClockedIn: false,
+        clockOutTime: now, 
+        totalHoursToday: log.total_hours 
+      }));
 
-    const newLog: AttendanceLog = {
-      id: Date.now().toString(),
-      userId: user?.id || '',
-      date: new Date().toISOString().split('T')[0],
-      clockInTime: status.clockInTime,
-      clockInPhotoUrl: photoUrl,
-      clockOutTime: now,
-      clockOutPhotoUrl: photoUrl,
-      totalHours,
-      createdAt: new Date(),
-    };
-    setLogs(prev => [newLog, ...prev]);
-    toast({ title: "Clocked Out Successfully", description: `You worked ${totalHours?.toFixed(1)} hours today` });
+      toast({ title: "Clocked Out Successfully", description: `You worked ${Number(log.total_hours).toFixed(1)} hours today` });
+      fetchLogs(); // Refresh logs
+    } catch (error) {
+      console.error('Error clocking out:', error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to clock out", 
+        variant: "destructive" 
+      });
+    }
   };
 
   return (

@@ -13,7 +13,7 @@ interface CameraCaptureProps {
 export function CameraCapture({ isOpen, onCapture, onClose, type }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,27 +22,53 @@ export function CameraCapture({ isOpen, onCapture, onClose, type }: CameraCaptur
     try {
       setError(null);
       setIsLoading(true);
+      
+      // Check if mediaDevices is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera API not supported in this browser');
+      }
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: 640, height: 480 }
+        video: { 
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        }
       });
-      setStream(mediaStream);
+      streamRef.current = mediaStream;
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
     } catch (err) {
-      setError('Unable to access camera. Please grant camera permissions.');
       console.error('Camera error:', err);
+      let errorMessage = 'Unable to access camera. Please grant camera permissions.';
+      
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          errorMessage = 'Camera permission denied. Please allow camera access in your browser settings.';
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          errorMessage = 'No camera found on this device.';
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          errorMessage = 'Camera is currently in use by another application.';
+        } else if (err.name === 'OverconstrainedError') {
+          errorMessage = 'Camera does not match required constraints.';
+        } else if (window.isSecureContext === false) {
+           errorMessage = 'Camera access requires a secure connection (HTTPS).';
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
-  }, [stream]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -52,7 +78,7 @@ export function CameraCapture({ isOpen, onCapture, onClose, type }: CameraCaptur
       setCapturedImage(null);
     }
     return () => stopCamera();
-  }, [isOpen]);
+  }, [isOpen, startCamera, stopCamera]);
 
   const capturePhoto = () => {
     if (videoRef.current && canvasRef.current) {
